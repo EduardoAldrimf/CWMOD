@@ -37,6 +37,10 @@ export default {
       isFeatureEnabledonAccount: 'accounts/isFeatureEnabledonAccount',
       globalConfig: 'globalConfig/get',
     }),
+    // Retorna true se o usuário não for administrador.
+    hideAllTabsForAgents() {
+      return !this.isAdmin;
+    },
     isCountZero() {
       return this.menuItem.count === 0;
     },
@@ -46,11 +50,14 @@ export default {
     hasSubMenu() {
       return !!this.menuItem.children;
     },
+    // Se o menu for do tipo "All Conversations" (identificado por toStateName "home")
+    // e o usuário não for admin, não exibe o item.
     isMenuItemVisible() {
+      if (this.menuItem.toStateName === 'home' && this.hideAllTabsForAgents) {
+        return false;
+      }
+
       if (this.menuItem.globalConfigFlag) {
-        // this checks for the `csmlEditorHost` flag in the global config
-        // if this is present, we toggle the CSML editor menu item
-        // TODO: This is very specific, and can be handled better, fix it
         return !!this.globalConfig[this.menuItem.globalConfigFlag];
       }
 
@@ -76,8 +83,10 @@ export default {
 
       return isFeatureEnabled;
     },
+    // Exibe "All Conversations" somente se o usuário for admin e as demais condições forem atendidas.
     isAllConversations() {
       return (
+        this.isAdmin &&
         this.$store.state.route.name === 'inbox_conversation' &&
         this.menuItem.toStateName === 'home'
       );
@@ -92,6 +101,12 @@ export default {
       return (
         isOnUnattendedView({ route: this.$route }) &&
         this.menuItem.toStateName === 'conversation_unattended'
+      );
+    },
+    isParticipating() {
+      return (
+        isOnParticipationView({ route: this.$route }) &&
+        this.menuItem.toStateName === 'conversation_participating'
       );
     },
     isTeamsSettings() {
@@ -121,9 +136,7 @@ export default {
     isCurrentRoute() {
       return this.$store.state.route.name.includes(this.menuItem.toStateName);
     },
-
     computedClass() {
-      // If active inbox is present, do not highlight conversations
       if (this.activeInbox) return ' ';
       if (
         this.isAllConversations ||
@@ -144,7 +157,6 @@ export default {
         }
         return 'hover:text-slate-700 dark:hover:text-slate-100';
       }
-
       return 'hover:text-slate-700 dark:hover:text-slate-100';
     },
   },
@@ -164,6 +176,12 @@ export default {
       );
       return warningClass;
     },
+    getPolicyPermissions(newLinkTag) {
+      if (newLinkTag === 'NEW_LABEL') {
+        return ['administrator', 'label_manage'];
+      }
+      return ['administrator'];
+    },
     newLinkClick(e, navigate) {
       if (this.menuItem.newLinkRouteName) {
         navigate(e);
@@ -171,6 +189,10 @@ export default {
         if (this.menuItem.modalName === 'AddLabel') {
           e.preventDefault();
           this.$emit('addLabel');
+        }
+        if (this.menuItem.modalName === 'DashboardAppModal') {
+          e.preventDefault();
+          this.$emit('DashboardAppModal');
         }
       }
     },
@@ -254,7 +276,7 @@ export default {
         :show-child-count="showChildCount(child.count)"
         :child-item-count="child.count"
       />
-      <Policy :permissions="['administrator']">
+      <Policy :permissions="getPolicyPermissions(menuItem.newLinkTag)">
         <router-link
           v-if="menuItem.newLink"
           v-slot="{ href, navigate }"
